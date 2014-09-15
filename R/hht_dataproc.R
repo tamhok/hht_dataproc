@@ -42,33 +42,44 @@ load.plate.plan <- function (xlsx.sheet, sep = ":"){
 #Checks and sees if it is time series (kinetic) data or normal plate data
 isPlate  <- function(plan) {
   plan.dim  <- dim(plan)
-  if(length(grep("[0-9]", plan[plan.dim[2],1])) > 0) {
-	 return TRUE
+  if(length(grep("[0-9]", plan[plan.dim[1],1])) == 0) {
+	 return(TRUE)
   } else {
-	 return FALSE
+	 return(FALSE)
   } 
 }
 
+# Loads tecan data from an excel sheet. Returns 0 if no tecan data found
+# Otherwise, returns lists of the matrices in the form of lists with the 
+# field plate or plate and aux, if it is a timeseries data set. 
 load.tecan.data <- function(xlsx.sheet) {
+  #Get the first column
   cols = readColumns(xlsx.sheet, 1,1,1, header = FALSE)
   
-  plate.start = which(cols == "<>")
-  plate.end = sapply(ps2, function(x) plate.end[which(plate.end > x)][1])
+  #Check for markers of the first corner of a data table. If none, return 0
+  plate.start = which(cols == "<>" | cols == "Cycle Nr.")
+  if(length(plate.start) == 0) {
+	  return(0)
+  }
+  #Check for end of plate.
+  plate.end = c(which(cols == ""), length(cols))
+  plate.end = sapply(plate.start, function(x) plate.end[which(plate.end > x)][1])
   
   pindices = rbind(plate.start, plate.end) 
 
   plate.interpret  <- function(p.index) {
      plate.d  <- readRows(xlsx.sheet, p.index[1], p.index[2] - 1, 1)
      if(isPlate(plate.d)) {
-	  plate = plate2list(remove.headers.footers(plate.d))
+	  return(list(plate = plate2list(remove.headers.footers(plate.d))))
      }	else {
 	  datarows = grep("[A-Z][0-9]+", plate.d[,1]) 
-	  plate = plate.d[datarows, -1]
+	  plate = plate.d[datarows,]
 	  rownames(plate) = plate.d[datarows, 1]
-	  colnames(plate) = plate.d[1, -1]
-	  aux.data = plate.d[c(-1,-datarows), -1]
+	  colnames(plate) = c("pos", plate.d[1, -1])
+	  aux.data = plate.d[c(-1,-datarows),]
 	  rownames(aux.data) = plate.d[c(-1, -datarows),1]
-	  colnames(plate) = plate.d[1, -1]
+	  colnames(plate) = c("aux", plate.d[1, -1])
+	  return(list(plate = plate, aux = aux.data))
      }     
   }
   return(apply(pindices, 2, plate.interpret))
