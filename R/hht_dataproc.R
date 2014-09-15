@@ -12,26 +12,26 @@ plate2list=function(data) {
 }
 
 #Trim row and column names out of data
-remove_headers_footers = function(data) {
-  data_n = data[-1,-1]
-  rownames(data_n) = data[-1,1]
-  colnames(data_n) = data[1,-1] 
-  return(data_n)
+remove.headers.footers <- function(data) {
+  data.n = data[-1,-1]
+  rownames(data.n) = data[-1,1]
+  colnames(data.n) = data[1,-1] 
+  return(data.n)
 }
 
 #Given an excel sheet, find the plate plan and the data format
-load_plate_plan = function (xlsx_sheet, sep = ":"){
-  cols = readColumns(xlsx_sheet, 1,1,1, header = FALSE)
+load.plate.plan <- function (xlsx.sheet, sep = ":"){
+  cols = readColumns(xlsx.sheet, 1,1,1, header = FALSE)
   
   #Read format string, will be colnames of the plan
-  form_row = which(cols == "FORMAT")
-  formatstr= readRows(xlsx_sheet, form_row, form_row, 2,2)
+  form.row = which(cols == "FORMAT")
+  formatstr= readRows(xlsx.sheet, form.row, form.row, 2,2)
   
   #Read and parse the plan
-  plan_start = which(cols == "PLAN")
-  plan_end = which(cols == "ENDPLAN")
-  plan_d = readRows(xlsx_sheet, plan_start, plan_end - 1, 1)
-  plan = plate2list(remove_headers_footers(plan_d))
+  plan.start = which(cols == "PLAN")
+  plan.end = which(cols == "ENDPLAN")
+  plan.d = readRows(xlsx.sheet, plan.start, plan.end - 1, 1)
+  plan = plate2list(remove.headers.footers(plan.d))
   
   #Expand plan to create new variables and give them correct colnames
   planvals = Reduce(rbind, strsplit(as.character(plan$data), sep))
@@ -39,10 +39,23 @@ load_plate_plan = function (xlsx_sheet, sep = ":"){
   newplan = data.frame(pos = plan$pos, planvals, stringsAsFactors = FALSE)
 }
 
-load_tecan_data = function(xlsx_sheet) {
-  cols = readColumns(xlsx_sheet, 1,1,1, header = FALSE)
+#Checks and sees if it is time series (kinetic) data or normal plate data
+isPlate  <- function(plan) {
+  plan.dim  <- dim(plan)
+  if(length(grep("[0-9]", plan[plan.dim[2],1])) > 0) {
+	 return TRUE
+  } else {
+	 return FALSE
+  } 
+}
+
+load.tecan.data <- function(xlsx.sheet) {
+  cols = readColumns(xlsx.sheet, 1,1,1, header = FALSE)
   
-  plate_start = which(cols == "<>")
-  plate_end = sapply(ps2, function(x) plate_end[which(plate_end > x)][1])
+  plate.start = which(cols == "<>")
+  plate.end = sapply(ps2, function(x) plate.end[which(plate.end > x)][1])
   
+  for (1:length(plate.start)) {
+     plan.d  <- readRows(xlsx.sheet, plate.start, plate.end - 1, 1)
+  }
 }
