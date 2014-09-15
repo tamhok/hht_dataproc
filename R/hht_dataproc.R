@@ -55,7 +55,21 @@ load.tecan.data <- function(xlsx.sheet) {
   plate.start = which(cols == "<>")
   plate.end = sapply(ps2, function(x) plate.end[which(plate.end > x)][1])
   
-  for (1:length(plate.start)) {
-     plan.d  <- readRows(xlsx.sheet, plate.start, plate.end - 1, 1)
+  pindices = rbind(plate.start, plate.end) 
+
+  plate.interpret  <- function(p.index) {
+     plate.d  <- readRows(xlsx.sheet, p.index[1], p.index[2] - 1, 1)
+     if(isPlate(plate.d)) {
+	  plate = plate2list(remove.headers.footers(plate.d))
+     }	else {
+	  datarows = grep("[A-Z][0-9]+", plate.d[,1]) 
+	  plate = plate.d[datarows, -1]
+	  rownames(plate) = plate.d[datarows, 1]
+	  colnames(plate) = plate.d[1, -1]
+	  aux.data = plate.d[c(-1,-datarows), -1]
+	  rownames(aux.data) = plate.d[c(-1, -datarows),1]
+	  colnames(plate) = plate.d[1, -1]
+     }     
   }
+  return(apply(pindices, 2, plate.interpret))
 }
