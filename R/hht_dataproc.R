@@ -49,6 +49,19 @@ isPlate  <- function(plan) {
   } 
 }
 
+#' converts specific columns of a data frame according to fn.
+convert.df  <-  function(dframe, cols=1:ncol(dframe), s=NA, fn=as.numeric) {
+  if(!is.na(s)) {
+	  cols = s:ncol(dframe)
+  }
+  nums=apply(dframe[,cols, drop=F], 2, fn)
+  dframe[,cols]=nums
+  return(dframe)
+}
+
+# Makes strings as factors false
+df.nf <- function(mat) data.frame(mat, stringsAsFactors=FALSE)
+
 # Loads tecan data from an excel sheet. Returns 0 if no tecan data found
 # Otherwise, returns lists of the matrices in the form of lists with the 
 # field plate or plate and aux, if it is a timeseries data set. 
@@ -70,17 +83,25 @@ load.tecan.data <- function(xlsx.sheet) {
   plate.interpret  <- function(p.index) {
      plate.d  <- readRows(xlsx.sheet, p.index[1], p.index[2] - 1, 1)
      if(isPlate(plate.d)) {
-	  return(list(plate = plate2list(remove.headers.footers(plate.d))))
+	  plate = df.nf(plate2list(remove.headers.footers(plate.d))) 
+     	  return(list(plate = convert.df(plate, s=2)))
      }	else {
 	  datarows = grep("[A-Z][0-9]+", plate.d[,1]) 
-	  plate = plate.d[datarows,]
+	  plate = df.nf(plate.d[datarows,])
 	  rownames(plate) = plate.d[datarows, 1]
 	  colnames(plate) = c("pos", plate.d[1, -1])
-	  aux.data = plate.d[c(-1,-datarows),]
+	  aux.data = df.nf(plate.d[c(-1,-datarows),])
 	  rownames(aux.data) = plate.d[c(-1, -datarows),1]
-	  colnames(plate) = c("aux", plate.d[1, -1])
-	  return(list(plate = plate, aux = aux.data))
+	  colnames(aux.data) = c("aux", plate.d[1, -1])
+	  return(list(plate = convert.df(plate, s=2), 
+		      aux = convert.df(aux.data, s=2)))
      }     
   }
   return(apply(pindices, 2, plate.interpret))
+}
+
+dp.test  <- function() {
+	wb <- loadWorkbook("../samples/tecan_kin_test.xlsx")
+	shts  <- getSheets(wb)
+	return(load.tecan.data(shts[[9]]))
 }
