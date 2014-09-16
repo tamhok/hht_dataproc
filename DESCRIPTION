@@ -1,9 +1,15 @@
-Package: hht_dataproc
-Type: Package
-Title: What the package does (short line)
-Version: 1.0
-Date: 2014-09-11
-Author: Who wrote it
-Maintainer: Who to complain to <yourfault@somewhere.net>
-Description: More about what it does (maybe more than one line)
-License: What license is it under?
+Package: hhtdataproc
+Title: Data processing suite for Anderson Lab
+Version: 0.1
+Authors@R: c(person("Hok Hei", "Developer", role = c("aut", "cre"),
+    email = "tamhok@mit.edu"))
+Description: Contains generally useful functions for processing tecan and
+    LightCycler 480 qPCR data. For working with data and plans, samples
+    and standards.
+Depends:
+    R (>= 3.1.1)
+License: MIT
+LazyData: true
+Imports:
+    hhtutils,
+    xlsx

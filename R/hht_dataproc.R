@@ -1,6 +1,10 @@
-library('xlsx')
+library(hhtutils)
 
+#' Plate to List Converter
+#' 
 #' Turns a data structure that is in "plate format" to a data frame with row, column, etc.
+#' @param data Plate data formet
+#' @return a list consisting of a column positions e.g "A1" and data
 plate2list=function(data) {
   newdata=matrix(as.matrix(data), prod(dim(data)),1)
   pos = outer(rownames(data), colnames(data), FUN=function(x,y) paste(x, y, sep = ""))
@@ -11,26 +15,26 @@ plate2list=function(data) {
   return(newdata)
 }
 
-#Trim row and column names out of data
-remove.headers.footers <- function(data) {
-  data.n = data[-1,-1]
-  rownames(data.n) = data[-1,1]
-  colnames(data.n) = data[1,-1] 
-  return(data.n)
-}
-
-#Given an excel sheet, find the plate plan and the data format
+#' Plan loader
+#'
+#' Given an excel sheet, find the plate plan and the data format
+#' Finds strings in col 1 with "FORMAT" and "PLAN", interprets 
+#' the plan string in each cell and converts it to list format
+#' @param xlsx.sheet excel sheet object called from xlsx package
+#' @param sep separator for plan format objects, default :
+#' @return a matrix with columns pos, containing the posiion, and columns named in the format string with separated out plan elements
+#' @examples Formats: "CELLS:SAMPLE:CONC", Cells: "HeLa:ctx3:1uM"
 load.plate.plan <- function (xlsx.sheet, sep = ":"){
-  cols = readColumns(xlsx.sheet, 1,1,1, header = FALSE)
+  cols = xlsx::readColumns(xlsx.sheet, 1,1,1, header = FALSE)
   
   #Read format string, will be colnames of the plan
   form.row = which(cols == "FORMAT")
-  formatstr= readRows(xlsx.sheet, form.row, form.row, 2,2)
+  formatstr= xlsx::readRows(xlsx.sheet, form.row, form.row, 2,2)
   
   #Read and parse the plan
   plan.start = which(cols == "PLAN")
   plan.end = which(cols == "ENDPLAN")
-  plan.d = readRows(xlsx.sheet, plan.start, plan.end - 1, 1)
+  plan.d = xlsx::readRows(xlsx.sheet, plan.start, plan.end - 1, 1)
   plan = plate2list(remove.headers.footers(plan.d))
   
   #Expand plan to create new variables and give them correct colnames
@@ -39,7 +43,12 @@ load.plate.plan <- function (xlsx.sheet, sep = ":"){
   newplan = data.frame(pos = plan$pos, planvals, stringsAsFactors = FALSE)
 }
 
-#Checks and sees if it is time series (kinetic) data or normal plate data
+#' Plate format checker
+#'
+#' Used for tecan data, this checks whether or not the format is in 96
+#' well plate format or actually already in list format.
+#' @param plan plate data
+#' @return whether there are numbers in the first col (yes list, no plate)
 isPlate  <- function(plan) {
   plan.dim  <- dim(plan)
   if(length(grep("[0-9]", plan[plan.dim[1],1])) == 0) {
@@ -49,25 +58,16 @@ isPlate  <- function(plan) {
   } 
 }
 
-#' converts specific columns of a data frame according to fn.
-convert.df  <-  function(dframe, cols=1:ncol(dframe), s=NA, fn=as.numeric) {
-  if(!is.na(s)) {
-	  cols = s:ncol(dframe)
-  }
-  nums=apply(dframe[,cols, drop=F], 2, fn)
-  dframe[,cols]=nums
-  return(dframe)
-}
-
-# Makes strings as factors false
-df.nf <- function(mat) data.frame(mat, stringsAsFactors=FALSE)
-
-# Loads tecan data from an excel sheet. Returns 0 if no tecan data found
-# Otherwise, returns lists of the matrices in the form of lists with the 
-# field plate or plate and aux, if it is a timeseries data set. 
+#' Tecan data loader
+#' 
+#' Loads tecan data from an excel sheet. Returns 0 if no tecan data found
+#' Otherwise, returns lists of the matrices in the form of lists with the 
+#' field plate or plate and aux, if it is a timeseries data set. 
+#' @param xlsx.sheet Excel sheet with data
+#' @return a list of lists, each element containing either a plate matrix or a plate matrix as well as auxiliary information if it is timeseries data. Usually includes things like time and temperature.
 load.tecan.data <- function(xlsx.sheet) {
   #Get the first column
-  cols = readColumns(xlsx.sheet, 1,1,1, header = FALSE)
+  cols = xlsx::readColumns(xlsx.sheet, 1,1,1, header = FALSE)
   
   #Check for markers of the first corner of a data table. If none, return 0
   plate.start = which(cols == "<>" | cols == "Cycle Nr.")
@@ -81,7 +81,7 @@ load.tecan.data <- function(xlsx.sheet) {
   pindices = rbind(plate.start, plate.end) 
 
   plate.interpret  <- function(p.index) {
-     plate.d  <- readRows(xlsx.sheet, p.index[1], p.index[2] - 1, 1)
+     plate.d  <- xlsx::readRows(xlsx.sheet, p.index[1], p.index[2] - 1, 1)
      if(isPlate(plate.d)) {
 	  plate = df.nf(plate2list(remove.headers.footers(plate.d))) 
      	  return(list(plate = convert.df(plate, s=2)))
@@ -100,8 +100,10 @@ load.tecan.data <- function(xlsx.sheet) {
   return(apply(pindices, 2, plate.interpret))
 }
 
+#' Kind of testing function
+#' Don't use it.
 dp.test  <- function() {
-	wb <- loadWorkbook("../samples/tecan_kin_test.xlsx")
-	shts  <- getSheets(wb)
+	wb <- xlsx::loadWorkbook("../samples/tecan_kin_test.xlsx")
+	shts  <- xlsx::getSheets(wb)
 	return(load.tecan.data(shts[[9]]))
 }
