@@ -58,6 +58,75 @@ isPlate  <- function(plan) {
   } 
 }
 
+#' Aggregate replicates
+#'
+#' @param data matrix with positions, data, and the plan
+agg.data <- function(plan, data) {
+	by.list = lapply(2:ncol(plan), function(x) plan[,x])
+	adata = aggregate(data[,-1], by.list, function(x) c(mean(x), sd(x)))
+  colnames(adata) = c(colnames(plan)[-1], "data")
+  return(adata)
+}
+
+#' Divide by probes
+#' 
+#' Function to process data by normalizing genes by control probes. Used for bDNA or qPCR studies.
+#' @param adata aggregated data
+#' @param smpl name of sample probe
+#' @param ctrl name of control probe
+#' @param field name of probe field
+div.probes <- function(adata, smpl = "AHA1", ctrl = "ACTB", field = "PROBE") {
+  samples= adata[which(adata[,field]==smpl),-which(colnames(adata)==field)]
+  controls = adata[which(adata[,field]==ctrl),-which(colnames(adata)==field)]
+  merge_fields = colnames(adata)[1:(ncol(adata)-1)]
+  merge_fields = merge_fields[-which(merge_fields==field)]
+  combd = merge(samples, controls, by = merge_fields)
+  return(cbind(combd[,merge_fields], combd$data.x / combd$data.y))
+}
+
+#' Normalize data
+#' 
+#' Normalize data by the positive or negative controls.
+#' @param aggdata data passed through the aggregate function
+#' @param pos.control Text with which to look for negative controls
+#' @param neg.control Text with which to look for positive controls
+#' @param weights value with which to weight differences in the different fields. Default is 2^(1:number of fields)
+#' @return normalized data
+norm.data <- function(data, pos.control = NA, neg.control = NA, weights = 2^(1:(ncol(data)-2))) {
+  fields = data[,1:(ncol(data)-2)]
+  combf = apply(fields,1, function(x) paste0(x, collapse = ":"))
+    
+  #Finds the control which is closest
+  find.closest = function(match, controls) {
+    return(which.max(apply(controls, 1, function(x) sum((match == x)*weights))))
+  }
+  
+  #Returns the amount to scale
+  make.scale = function(scale.str) {
+    scale.id = grep(scale.str, combf)
+    scale = fields[scale.id,]
+    scale.data = data[scale.id,ncol(data)-1]
+    return(scale.data[apply(fields, 1, function(x) find.closest(x, scale))])
+  }
+  
+  if(!is.na(neg.control)) {
+    neg.vals = make.scale(neg.control)
+  } else {
+    neg.vals = rep(0, nrow(data))
+  }
+  if(!is.na(pos.control)) {
+    pos.vals = make.scale(pos.control)
+  } else {
+    pos.vals = neg.vals + 1
+  }
+  
+  means = (data[,ncol(data)-1] - neg.vals) / (pos.vals -neg.vals)
+  sds = data[,ncol(data)] / (pos.vals - neg.vals)
+  return(cbind(fields, means, sds))
+}
+
+#' 
+
 #' Tecan data loader
 #' 
 #' Loads tecan data from an excel sheet. Returns 0 if no tecan data found
@@ -98,6 +167,19 @@ load.tecan.data <- function(xlsx.sheet) {
      }     
   }
   return(apply(pindices, 2, plate.interpret))
+}
+
+
+bdna.test <- function() {
+	wb <- xlsx::loadWorkbook("../samples/tecan_bdna.xlsx")
+	shts <- xlsx::getSheets(wb)
+  
+  ad = Reduce(rbind, lapply(shts, function(x) load.tecan.data(x)[[1]]$plate))
+  ap = Reduce(rbind, lapply(shts, load.plate.plan))
+	td= load.tecan.data(shts[[1]])
+	tp = load.plate.plan(shts[[1]])
+	at = agg.data(tp, td[[1]]$plate)
+  nt = div.probes(at)
 }
 
 #' Kind of testing function
