@@ -1,4 +1,5 @@
-library(hhtutils)
+
+library(xlsx)
 
 #' Plate to List Converter
 #' 
@@ -35,7 +36,7 @@ load.plate.plan <- function (xlsx.sheet, sep = ":"){
   plan.start = which(cols == "PLAN")
   plan.end = which(cols == "ENDPLAN")
   plan.d = xlsx::readRows(xlsx.sheet, plan.start, plan.end - 1, 1)
-  plan = plate2list(remove.headers.footers(plan.d))
+  plan = plate2list(hhtutils::remove.headers.footers(plan.d))
   
   #Expand plan to create new variables and give them correct colnames
   planvals = Reduce(rbind, strsplit(as.character(plan$data), sep))
@@ -71,6 +72,7 @@ agg.data <- function(plan, data) {
 #' Divide by probes
 #' 
 #' Function to process data by normalizing genes by control probes. Used for bDNA or qPCR studies.
+#' Will not return unmatched data (data without both probes present)
 #' @param adata aggregated data
 #' @param smpl name of sample probe
 #' @param ctrl name of control probe
@@ -125,8 +127,6 @@ norm.data <- function(data, pos.control = NA, neg.control = NA, weights = 2^(1:(
   return(cbind(fields, means, sds))
 }
 
-#' 
-
 #' Tecan data loader
 #' 
 #' Loads tecan data from an excel sheet. Returns 0 if no tecan data found
@@ -152,34 +152,45 @@ load.tecan.data <- function(xlsx.sheet) {
   plate.interpret  <- function(p.index) {
      plate.d  <- xlsx::readRows(xlsx.sheet, p.index[1], p.index[2] - 1, 1)
      if(isPlate(plate.d)) {
-	  plate = df.nf(plate2list(remove.headers.footers(plate.d))) 
-     	  return(list(plate = convert.df(plate, s=2)))
+	  plate = hhtutils::df.nf(plate2list(hhtutils::remove.headers.footers(plate.d))) 
+     	  return(list(plate = hhtutils::convert.df(plate, s=2)))
      }	else {
 	  datarows = grep("[A-Z][0-9]+", plate.d[,1]) 
-	  plate = df.nf(plate.d[datarows,])
+	  plate = hhtutils::df.nf(plate.d[datarows,])
 	  rownames(plate) = plate.d[datarows, 1]
 	  colnames(plate) = c("pos", plate.d[1, -1])
-	  aux.data = df.nf(plate.d[c(-1,-datarows),])
+	  aux.data = hhtutils::df.nf(plate.d[c(-1,-datarows),])
 	  rownames(aux.data) = plate.d[c(-1, -datarows),1]
 	  colnames(aux.data) = c("aux", plate.d[1, -1])
-	  return(list(plate = convert.df(plate, s=2), 
+	  return(list(plate = hhtutils::convert.df(plate, s=2), 
 		      aux = convert.df(aux.data, s=2)))
      }     
   }
   return(apply(pindices, 2, plate.interpret))
 }
 
+bdna.proc <- function(shts) {
+  ad = Reduce(rbind, lapply(shts, function(x) load.tecan.data(x)[[1]]$plate))
+  ap = Reduce(rbind, lapply(shts, load.plate.plan))
+  at = agg.data(ap, ad)
+  nt = div.probes(at)
+  mt = norm.data(nt, pos.control = "Blank", neg.control = "si:RNAiMax")
+  ggplot2::ggplot(mt, ggplot2::aes(x = CONC, y = means)) + ggplot2::geom_bar(stat ="identity") + 
+    ggplot2::geom_errorbar(ggplot2::aes(ymin = means - sds, ymax = means + sds)) + ggplot2::facet_wrap(~ CELL + SAMPLE) + ggplot2::theme_bw()
+}
 
 bdna.test <- function() {
-	wb <- xlsx::loadWorkbook("../samples/tecan_bdna.xlsx")
+  setwd("~/hhtdataproc/R")
+  wb <- xlsx::loadWorkbook("../samples/tecan_bdna.xlsx")
 	shts <- xlsx::getSheets(wb)
   
   ad = Reduce(rbind, lapply(shts, function(x) load.tecan.data(x)[[1]]$plate))
   ap = Reduce(rbind, lapply(shts, load.plate.plan))
-	td= load.tecan.data(shts[[1]])
-	tp = load.plate.plan(shts[[1]])
-	at = agg.data(tp, td[[1]]$plate)
+	at = agg.data(ap, ad)
   nt = div.probes(at)
+  mt = norm.data(nt, pos.control = "Blank", neg.control = "si:RNAiMax")
+	ggplot(mt, aes(x = CONC, y = means)) + geom_bar(stat ="identity") + 
+    geom_errorbar(aes(ymin = means - sds, ymax = means + sds)) + facet_wrap(~ CELL + SAMPLE) + theme_bw()
 }
 
 #' Kind of testing function
