@@ -12,4 +12,5 @@ License: MIT
 LazyData: true
 Imports:
     hhtutils,
-    xlsx
+    xlsx,
+    ggplot2

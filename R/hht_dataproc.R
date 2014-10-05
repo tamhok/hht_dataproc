@@ -29,12 +29,17 @@ load.plate.plan <- function (xlsx.sheet, sep = ":"){
   cols = xlsx::readColumns(xlsx.sheet, 1,1,1, header = FALSE)
   
   #Read format string, will be colnames of the plan
-  form.row = which(cols == "FORMAT")
+  form.row = which(cols == "FORMAT" | cols == "FORMAT:ID")
   formatstr= xlsx::readRows(xlsx.sheet, form.row, form.row, 2,2)
   
   #Read and parse the plan
   plan.start = which(cols == "PLAN")
   plan.end = which(cols == "ENDPLAN")
+  
+  if(length(plan.start) > 1) {
+    plan.start = plan.start[length(plan.start)]
+  }
+  
   plan.d = xlsx::readRows(xlsx.sheet, plan.start, plan.end - 1, 1)
   plan = plate2list(hhtutils::remove.headers.footers(plan.d))
   
@@ -66,6 +71,18 @@ agg.data <- function(plan, data) {
 	by.list = lapply(2:ncol(plan), function(x) plan[,x])
 	adata = aggregate(data[,-1], by.list, function(x) c(mean(x), sd(x)))
   colnames(adata) = c(colnames(plan)[-1], "data")
+  return(adata)
+}
+
+#' Aggregate replicates that have already been divided by probes
+#' 
+#' 
+agg.data2 <- function(data, datacol = ncol(data)-1) {
+  plan = data[,1:(datacol-1)]
+  by.list = lapply(1:ncol(plan), function(x) plan[,x])
+  adata = aggregate(data[,datacol], by.list, function(x) c(mean(x), sd(x)))
+  adata = cbind(adata[,1:(datacol-1)], adata[,datacol])
+  colnames(adata) = c(colnames(plan), "mean", "sd")
   return(adata)
 }
 
@@ -174,9 +191,14 @@ bdna.proc <- function(shts) {
   ap = Reduce(rbind, lapply(shts, load.plate.plan))
   at = agg.data(ap, ad)
   nt = div.probes(at)
-  mt = norm.data(nt, pos.control = "Blank", neg.control = "si:RNAiMax")
-  ggplot2::ggplot(mt, ggplot2::aes(x = CONC, y = means)) + ggplot2::geom_bar(stat ="identity") + 
-    ggplot2::geom_errorbar(ggplot2::aes(ymin = means - sds, ymax = means + sds)) + ggplot2::facet_wrap(~ CELL + SAMPLE) + ggplot2::theme_bw()
+  nt2 = agg.data2(nt[,-which(colnames(nt)=="ID")])
+  mt = norm.data(nt2, pos.control = "Blank", neg.control = "si:RNAiMax")
+  ggplot2::ggplot(mt, ggplot2::aes(x = CONC, y = means)) + 
+    ggplot2::geom_bar(stat ="identity", width = 0.75) + 
+    ggplot2::geom_errorbar(ggplot2::aes(ymin = means - sds, ymax = means + sds), width = 0.1) + 
+    ggplot2::facet_wrap(~ CELL + SAMPLE) + ggplot2::theme_bw() +
+    ggplot2::ylim(-1,2)
+  return(mt)
 }
 
 bdna.test <- function() {
